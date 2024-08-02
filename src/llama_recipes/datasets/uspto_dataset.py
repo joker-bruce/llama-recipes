@@ -11,10 +11,10 @@ def get_preprocessed_uspto(dataset_config, tokenizer, split):
     print('split:', type(split), split)
 #    temp = datasets.load_dataset('csv',data_files="/afs/crc.nd.edu/user/x/xhuang2/llama_test/llama-recipes/recipes/finetuning/datasets/combined_finetuning_data.csv")
     if split == 'train':
-        temp = datasets.Dataset.from_csv("/afs/crc.nd.edu/user/x/xhuang2/llama_test/llama-recipes/recipes/finetuning/datasets/combined_finetuning_data_train.csv")
+        temp = datasets.Dataset.from_csv("./uspto_human_curated_datase/finetuning_data_train.csv")
         dataset = temp
     else:
-        temp = datasets.Dataset.from_csv("/afs/crc.nd.edu/user/x/xhuang2/llama_test/llama-recipes/recipes/finetuning/datasets/combined_finetuning_data_test.csv")
+        temp = datasets.Dataset.from_csv("./uspto_human_curated_datase/finetuning_data_test.csv")
         dataset = temp
 
     prompt = (
