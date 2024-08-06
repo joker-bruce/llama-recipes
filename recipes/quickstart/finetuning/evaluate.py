@@ -25,6 +25,7 @@ from llama_recipes.datasets import (
     get_alpaca_dataset,
     get_samsum_dataset,
     get_uspto_dataset,
+    get_any_dataset,
 )
 import torch
 import torch.cuda.nccl as nccl
@@ -34,26 +35,33 @@ from torch.distributed.fsdp.sharded_grad_scaler import ShardedGradScaler
 from tqdm import tqdm
 from transformers import LlamaTokenizer
 import json
-
+import argparse
+import pandas as pd
 
 from llama_recipes.model_checkpointing import save_model_checkpoint, save_model_and_optimizer_sharded, save_optimizer_checkpoint
 from llama_recipes.policies import fpSixteen,bfSixteen, get_llama_wrapper
 from llama_recipes.utils.memory_utils import MemoryTrace
 from accelerate.utils import is_xpu_available, is_ccl_available
 ##load model
+
+parser = argparse.ArgumentParser(description="parser for evaluating fine-tuned llama")
+parser.add_argument('--model_file', type=str, help='Llama model location')
+parser.add_argument('--chem_file', type=str, help='location of chemistry reaction info file')
+parser.add_argument('--peft_model', type=str, help='PEFT location')
+args = parser.parse_args()
 train_config= TRAIN_CONFIG()
 
-model_id="/afs/crc.nd.edu/user/x/xhuang2/llama_test/llama-recipes/recipes/finetuning/Llama-2-7b-hf"
+model_id=args.model_file
 
 tokenizer = LlamaTokenizer.from_pretrained(model_id)
 
 model =LlamaForCausalLM.from_pretrained(model_id, load_in_8bit=True, device_map='auto', torch_dtype=torch.float16)
 ##load lora
-peft_model_id = '/afs/crc.nd.edu/user/x/xhuang2/llama_test/llama-recipes/recipes/finetuning/PEFT_e200'
+peft_model_id = args.peft_model
 model.load_adapter(peft_model_id)
 
-##load data of uspto
-dataset_val =  get_uspto_dataset(None ,tokenizer, "test")
+##load data of chem reaction info
+dataset_val =  get_any_dataset(None ,tokenizer, args.chem_file)
 val_dl_kwargs = get_dataloader_kwargs(train_config, dataset_val, tokenizer, "val")
 eval_dataloader = torch.utils.data.DataLoader(
             dataset_val,
@@ -61,7 +69,10 @@ eval_dataloader = torch.utils.data.DataLoader(
             pin_memory=True,
             **val_dl_kwargs,
         )
+
+
 def evaluation(model, eval_dataloader, tokenizer):
+    # you can use this function to perform inference
     model.eval()
     eval_preds = []
     val_step_loss = []
@@ -95,18 +106,12 @@ def evaluation(model, eval_dataloader, tokenizer):
     
     return eval_epoch_loss, eval_preds
 
-def inference(model, eval_dataloader, tokenizer):
-    model.eval()
-    infer = []
-
-
 
 eval_loss, eval_preds = evaluation(model, eval_dataloader, tokenizer)
-import pandas as pd
 
-df = pd.read_csv('./datasets/combined_finetuning_data_test.csv')
+
+##output the result into a new csv
+df = pd.read_csv(args.chem_file)
 df['extracted'] = eval_preds
-df.to_csv('./output_finetune_llama_7b_e200.csv')
-import numpy as np 
-np.savetxt('output_finetune_llama_7b_e200.txt',eval_preds, fmt='%s')
+df.to_csv(f'./output_finetune_evaluate.csv')
 
